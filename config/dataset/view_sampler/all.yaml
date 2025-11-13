@@ -1,1 +1,5 @@
 name: all
+num_context_views: 3
+num_target_views: 1
+
+max_img_per_gpu: 3

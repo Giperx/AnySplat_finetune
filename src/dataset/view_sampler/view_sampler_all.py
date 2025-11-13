@@ -11,7 +11,9 @@ from .view_sampler import ViewSampler
 @dataclass
 class ViewSamplerAllCfg:
     name: Literal["all"]
-
+    num_context_views: int
+    num_target_views: int
+    max_img_per_gpu: int
 
 class ViewSamplerAll(ViewSampler[ViewSamplerAllCfg]):
     def sample(
@@ -26,6 +28,11 @@ class ViewSamplerAll(ViewSampler[ViewSamplerAllCfg]):
     ]:
         v, _, _ = extrinsics.shape
         all_frames = torch.arange(v, device=device)
+        # 修改：第二个返回值只是 all_frames 的第一个元素
+        # 保持张量数据类型
+        target_indices = all_frames[:1]  # 只取第一个元素，但保持为张量形式
+        
+        # return all_frames, target_indices
         return all_frames, all_frames
 
     @property

@@ -9,14 +9,17 @@ from .view_sampler import get_view_sampler
 from .dataset_dl3dv import DatasetDL3DV, DatasetDL3DVCfgWrapper
 from .dataset_scannetpp import DatasetScannetpp, DatasetScannetppCfgWrapper
 from .dataset_co3d import DatasetCo3d, DatasetCo3dCfgWrapper
+from .dataset_nuscenes import DatasetNuScenes, DatasetNuScenesCfgWrapper
 
 DATASETS: dict[str, Dataset] = {
     "co3d": DatasetCo3d,
     "scannetpp": DatasetScannetpp,
     "dl3dv": DatasetDL3DV,
+    "nuscenes": DatasetNuScenes
+    
 }
 
-DatasetCfgWrapper = DatasetDL3DVCfgWrapper | DatasetScannetppCfgWrapper | DatasetCo3dCfgWrapper
+DatasetCfgWrapper = DatasetDL3DVCfgWrapper | DatasetScannetppCfgWrapper | DatasetCo3dCfgWrapper | DatasetNuScenesCfgWrapper
 
 class TestDatasetWarpper(Dataset):
     def __init__(self, dataset: Dataset):

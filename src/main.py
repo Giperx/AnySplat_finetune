@@ -14,11 +14,11 @@ from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.strategies import DeepSpeedStrategy
 from omegaconf import DictConfig, OmegaConf
 from hydra.core.hydra_config import HydraConfig
-
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.model.model import get_model
 from src.misc.weight_modify import checkpoint_filter_fn
+from src.misc.hf_checkpoint_loader import prepare_checkpoint_path
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -80,7 +80,9 @@ def train(cfg_dict: DictConfig):
         if wandb.run is not None:
             wandb.run.log_code("src")
     else:
-        logger = LocalLogger()
+        # 未启用 wandb：将本地日志目录设置为 {hydra.run.dir}/local
+        local_log_dir = output_dir / "local"
+        logger = LocalLogger(log_dir=local_log_dir)
     
     # Set up checkpointing.
     callbacks.append(
@@ -137,6 +139,21 @@ def train(cfg_dict: DictConfig):
         get_losses(cfg.loss),
         step_tracker
     )
+    
+    # 处理 HuggingFace 或 Lightning 检查点
+    checkpoint_path = cfg.checkpointing.load
+    checkpoint_path_for_lightning, is_hf_pretrained = prepare_checkpoint_path(
+        checkpoint_path,
+        model=model_wrapper.model if checkpoint_path else None,
+    )
+    
+    if is_hf_pretrained:
+        print(cyan(f"Loaded HuggingFace pretrained model from: {checkpoint_path}"))
+        # 不传递 checkpoint_path 给 trainer，因为它是个目录
+        checkpoint_path_for_lightning = None
+    
+    model_wrapper.model.encoder.usePreTrainedWeights()
+    
     data_module = DataModule(
         cfg.dataset,
         cfg.data_loader,
@@ -145,12 +162,12 @@ def train(cfg_dict: DictConfig):
     )
     
     if cfg.mode == "train":
-        trainer.fit(model_wrapper, datamodule=data_module, ckpt_path=checkpoint_path)
+        trainer.fit(model_wrapper, datamodule=data_module, ckpt_path=checkpoint_path_for_lightning)
     else:
         trainer.test(
             model_wrapper,
             datamodule=data_module,
-            ckpt_path=checkpoint_path,
+            ckpt_path=checkpoint_path_for_lightning,
         )
 
 

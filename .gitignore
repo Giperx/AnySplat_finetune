@@ -194,3 +194,9 @@ anysplat_ckpt*
 input_images_*
 tmp_scripts/
 *v2*
+1112_lyft_dataset_scenes_calibs_cam2ego_1600.ndjson
+1112_lyft_dataset_scenes_images_1600.json
+1112_nuscenes_dataset_scenes_calibs_cam2ego_1600.ndjson
+1112_nuscenes_dataset_scenes_images_1600.json
+anysplat_hfog_1108
+vggtCKPT

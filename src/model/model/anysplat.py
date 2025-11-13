@@ -108,19 +108,44 @@ class AnySplat(nn.Module, huggingface_hub.PyTorchModelHubMixin):
         visualization_dump: Optional[dict] = None,
         near: float = 0.01,
         far: float = 100.0,
+        wide_fov: bool = False,
+        new_width: Optional[int] = None,
     ):
         b, v, c, h, w = context_image.shape
         device = context_image.device
         encoder_output = self.encoder(context_image, global_step, visualization_dump=visualization_dump)
         gaussians, pred_context_pose = encoder_output.gaussians, encoder_output.pred_context_pose
-        output = self.decoder.forward(
-            gaussians,
-            pred_context_pose['extrinsic'],
-            pred_context_pose["intrinsic"],
-            torch.ones(1, v, device=device) * near,
-            torch.ones(1, v, device=device) * far,
-            (h, w),
-            "depth",
-        )
+        if wide_fov:
+            ### add for wide fov rendering
+            # 1. 准备新的内参矩阵
+            new_pred_all_intrinsic = pred_context_pose["intrinsic"].clone()
+            # 2. 计算宽度比例
+            width_scale = w / new_width
+            # 3. 只修改归一化内参的 fx 部分
+            # new_pred_all_intrinsic[..., 0, 0] 是 fx_norm
+            new_pred_all_intrinsic[..., 0, 0] = new_pred_all_intrinsic[..., 0, 0] * width_scale
+            # print("intrinsic_newCalculate:", intrinsic_newCalculate)
+            # print("new_pred_all_intrinsic:", new_pred_all_intrinsic)
+            # print("extrinsic_newCalculate:", extrinsic_newCalculate)
+            # print("pred_context_pose['extrinsic']:", pred_context_pose['extrinsic'])
+            output = self.decoder.forward(
+                gaussians,
+                pred_context_pose['extrinsic'],
+                new_pred_all_intrinsic,
+                torch.ones(1, v, device=device) * near,
+                torch.ones(1, v, device=device) * far,
+                (h, new_width),
+                "depth",
+            )
+        else:
+            output = self.decoder.forward(
+                gaussians,
+                pred_context_pose['extrinsic'],
+                pred_context_pose["intrinsic"],
+                torch.ones(1, v, device=device) * near,
+                torch.ones(1, v, device=device) * far,
+                (h, w),
+                "depth",
+            )
         return encoder_output, output
     

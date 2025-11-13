@@ -108,7 +108,12 @@ class EncoderAnySplatCfg:
         "global+frame",
         "None",
     ] = "None"
+    useVGGT: bool = True
     distill: bool = False
+    frozenAggregator = False
+    frozenGaussianHead = False
+    frozenCameraHead = False
+    frozenDepthHead = False
     render_conf: bool = False
     opacity_conf: bool = False
     conf_threshold: float = 0.1
@@ -130,11 +135,24 @@ class EncoderAnySplat(Encoder[EncoderAnySplatCfg]):
 
     def __init__(self, cfg: EncoderAnySplatCfg) -> None:
         super().__init__(cfg)
-        model_full = VGGT.from_pretrained("facebook/VGGT-1B")
-        # model_full = VGGT()
+        # model_full = VGGT.from_pretrained("facebook/VGGT-1B")
+        model_full = VGGT()
+        ### add fixed backbone
+        # state_dict = torch.load("/home/test/LIVA/XZP/FeedForward/AnySplat/vggtCKPT/model.pt", map_location="cuda")
+        print("Init vggt weights---")
+        state_dict = torch.load("vggtCKPT/model_tracker_fixed_e20.pt", map_location="cuda")
+        model_full.load_state_dict(state_dict)
+        model_full = model_full.to("cuda")
+        print("Init vggt weights end---")
+        
         self.aggregator = model_full.aggregator.to(torch.bfloat16)
         self.freeze_backbone = cfg.freeze_backbone
+        self.useVGGT = cfg.useVGGT
         self.distill = cfg.distill
+        self.frozenAggregator = cfg.frozenAggregator
+        self.frozenGaussianHead = cfg.frozenGaussianHead
+        self.frozenCameraHead = cfg.frozenCameraHead
+        self.frozenDepthHead = cfg.frozenDepthHead
         self.pred_pose = cfg.pred_pose
 
         self.camera_head = model_full.camera_head
@@ -212,6 +230,42 @@ class EncoderAnySplat(Encoder[EncoderAnySplatCfg]):
             conf_activation="expp1",
             features=head_params.feature_dim,
         )
+
+    ### add pretrained weights loading pretrain AnySplat model
+    def usePreTrainedWeights(self):
+
+        if self.cfg.useVGGT:
+            print("Using VGGT pretrained weights.")  # already loaded in __init__
+        else:
+            ### add pretrained weights loading pretrain AnySplat model
+            print("Using AnySplat pretrained weights.")
+            self.distill_aggregator = copy.deepcopy(self.aggregator)
+            self.distill_camera_head = copy.deepcopy(self.camera_head)
+            self.distill_depth_head = copy.deepcopy(self.depth_head)
+            for module in [
+                self.distill_aggregator,
+                self.distill_camera_head,
+                self.distill_depth_head,
+            ]:
+                for param in module.parameters():
+                    param.requires_grad = False
+                    param.data = param.data.cpu()
+        # self.frozenAggregator = cfg.frozenAggregator
+        # self.frozenGaussianHead = cfg.frozenGaussianHead
+        # self.frozenCameraHead = cfg.frozenCameraHead
+        # self.frozenDepthHead = cfg.frozenDepthHead
+        if self.frozenAggregator:
+            for param in self.aggregator.parameters():
+                param.requires_grad = False
+        if self.frozenGaussianHead:
+            for param in self.gaussian_param_head.parameters():
+                param.requires_grad = False
+        if self.frozenCameraHead:
+            for param in self.camera_head.parameters():
+                param.requires_grad = False
+        if self.frozenDepthHead:
+            for param in self.depth_head.parameters():
+                param.requires_grad = False
 
     def map_pdf_to_opacity(
         self,

@@ -179,8 +179,15 @@ class DynamicBatchSampler(Sampler):
             try:
                 # Sample random image number and aspect ratio
                 random_image_num = int(np.random.choice(self.possible_nums, p=self.normalized_weights))
-                random_ps_h = np.random.randint(low=(self.h_range[0] // 14), high=(self.h_range[1] // 14)+1)
+                ### 动态变化h，og method
+                # random_ps_h = np.random.randint(low=(self.h_range[0] // 14), high=(self.h_range[1] // 14)+1)
 
+                ### add use fixed h，固定训练时图像的高度为self.h_range[0]，也就是config中的input_image_shape
+                random_ps_h = (self.h_range[0] // 14)
+                
+                ### add use h from 225 ~ 252
+                # random_ps_h = np.random.randint(low=(self.h_range[0] // 14), high=(252 // 14)+1)
+                
                 # Update sampler parameters
                 self.sampler.update_parameters(
                     image_num=random_image_num,
@@ -261,14 +268,121 @@ class DynamicDistributedSampler(DistributedSampler):
         self.image_num = image_num
         self.ps_h = ps_h
 
+# class MixedBatchSampler(BatchSampler):
+#     """Sample one batch from a selected dataset with given probability.
+#     Compatible with datasets at different resolution
+#     """
+
+#     def __init__(
+#         self, src_dataset_ls, batch_size, num_context_views, world_size=1, rank=0, prob=None, sampler=None, generator=None
+#     ):
+#         self.base_sampler = None
+#         self.batch_size = batch_size
+#         self.num_context_views = num_context_views
+#         self.world_size = world_size
+#         self.rank = rank
+#         self.drop_last = True
+#         self.generator = generator
+
+#         self.src_dataset_ls = src_dataset_ls
+#         self.n_dataset = len(self.src_dataset_ls)
+        
+#         # Dataset length
+#         self.dataset_length = [len(ds) for ds in self.src_dataset_ls]
+#         self.cum_dataset_length = [
+#             sum(self.dataset_length[:i]) for i in range(self.n_dataset)
+#         ]  # cumulative dataset length
+        
+#         # BatchSamplers for each source dataset
+#         self.src_batch_samplers = []
+#         for ds in self.src_dataset_ls:
+#             sampler = DynamicDistributedSampler(ds, num_replicas=self.world_size, rank=self.rank, seed=42, shuffle=True)
+#             sampler.set_epoch(0)
+
+#             if hasattr(ds, "epoch"):
+#                 ds.epoch = 0
+#             if hasattr(ds, "set_epoch"):
+#                 ds.set_epoch(0)
+#             batch_sampler = DynamicBatchSampler(
+#                 sampler, 
+#                 [2, ds.cfg.view_sampler.num_context_views], 
+#                 ds.cfg.input_image_shape,
+#                 seed=42,
+#                 max_img_per_gpu=ds.cfg.view_sampler.max_img_per_gpu
+#             )
+#             self.src_batch_samplers.append(batch_sampler)
+        
+#         # self.src_batch_samplers = [
+#         #     BatchedRandomSampler(
+#         #         ds,
+#         #         num_context_views=ds.cfg.view_sampler.num_context_views,
+#         #         world_size=self.world_size,
+#         #         rank=self.rank,
+#         #         batch_size=self.batch_size,
+#         #         drop_last=self.drop_last,
+#         #     )
+#         #     for ds in self.src_dataset_ls
+#         # ]
+#         # set epoch here
+#         print("Setting epoch for all underlying BatchedRandomSamplers")
+#         # for sampler in self.src_batch_samplers:
+#         #     sampler.set_epoch(0)
+#         self.raw_batches = [
+#             list(bs) for bs in self.src_batch_samplers
+#         ]  # index in original dataset
+#         self.n_batches = [len(b) for b in self.raw_batches]
+#         self.n_total_batch = sum(self.n_batches)
+#         # print("Total batch num is ", self.n_total_batch)
+#         # sampling probability
+#         if prob is None:
+#             # if not given, decide by dataset length
+#             self.prob = torch.tensor(self.n_batches) / self.n_total_batch
+#         else:
+#             self.prob = torch.as_tensor(prob)
+    
+#     def __iter__(self):
+#         """Yields batches of indices in the format of (sample_idx, feat_idx) tuples,
+#         where indices correspond to ConcatDataset of src_dataset_ls
+#         """
+#         for _ in range(self.n_total_batch):
+#             idx_ds = torch.multinomial(
+#                 self.prob, 1, replacement=True, generator=self.generator
+#             ).item()
+            
+#             if 0 == len(self.raw_batches[idx_ds]):
+#                 self.raw_batches[idx_ds] = list(self.src_batch_samplers[idx_ds])
+            
+#             # get a batch from list - this is already in (sample_idx, feat_idx) format
+#             batch_raw = self.raw_batches[idx_ds].pop()
+
+#             # shift only the sample_idx by cumulative dataset length, keep feat_idx unchanged
+#             shift = self.cum_dataset_length[idx_ds]
+#             processed_batch = []
+
+#             for item in batch_raw:
+#                 # item[0] is the sample index, item[1] is the number of images
+#                 processed_item = (item[0] + shift, item[1], item[2])
+#                 processed_batch.append(processed_item)
+#             yield processed_batch
+        
+#     def set_epoch(self, epoch):
+#         """Set epoch for all underlying BatchedRandomSamplers"""
+#         for sampler in self.src_batch_samplers:
+#             sampler.set_epoch(epoch)
+#         # Reset raw_batches after setting new epoch
+#         self.raw_batches = [list(bs) for bs in self.src_batch_samplers]
+
+#     def __len__(self):
+#         return self.n_total_batch
+
 class MixedBatchSampler(BatchSampler):
     """Sample one batch from a selected dataset with given probability.
     Compatible with datasets at different resolution
     """
 
     def __init__(
-        self, src_dataset_ls, batch_size, num_context_views, world_size=1, rank=0, prob=None, sampler=None, generator=None
-    ):
+        self, src_dataset_ls, batch_size, num_context_views, world_size=1, rank=0, prob=None, sampler=None, generator=None, max_batches=None
+    ,runTag='training'):
         self.base_sampler = None
         self.batch_size = batch_size
         self.num_context_views = num_context_views
@@ -276,7 +390,7 @@ class MixedBatchSampler(BatchSampler):
         self.rank = rank
         self.drop_last = True
         self.generator = generator
-
+        self.runTag=runTag
         self.src_dataset_ls = src_dataset_ls
         self.n_dataset = len(self.src_dataset_ls)
         
@@ -298,7 +412,7 @@ class MixedBatchSampler(BatchSampler):
                 ds.set_epoch(0)
             batch_sampler = DynamicBatchSampler(
                 sampler, 
-                [2, ds.cfg.view_sampler.num_context_views], 
+                [ds.cfg.view_sampler.num_context_views, ds.cfg.view_sampler.num_context_views], 
                 ds.cfg.input_image_shape,
                 seed=42,
                 max_img_per_gpu=ds.cfg.view_sampler.max_img_per_gpu
@@ -325,6 +439,12 @@ class MixedBatchSampler(BatchSampler):
         ]  # index in original dataset
         self.n_batches = [len(b) for b in self.raw_batches]
         self.n_total_batch = sum(self.n_batches)
+        # 处理 max_batches：若指定，取 min(指定值, 总 batch 数)，避免超界
+        print("from init in parm max_batches:", max_batches)
+        self.max_batches = max_batches if max_batches is not None else self.n_total_batch
+        # self.max_batches = max_batches
+        self.max_batches = int(min(self.max_batches, self.n_total_batch))  # 防止超过总场景数
+        
         # print("Total batch num is ", self.n_total_batch)
         # sampling probability
         if prob is None:
@@ -332,12 +452,22 @@ class MixedBatchSampler(BatchSampler):
             self.prob = torch.tensor(self.n_batches) / self.n_total_batch
         else:
             self.prob = torch.as_tensor(prob)
-    
+        print(f"MixedBatchSampler initialized (stage: validation)")
+        print(f"Number of datasets: {self.n_dataset}")
+        print(f"Original prob input: {prob}")
+        print(f"Final prob tensor: {self.prob}")
+        # print(f"Sum of prob (should be ~1.0 for valid sampling): {self.prob.sum().item()}")
+        print(f"Batch count per dataset: {self.n_batches}")
+        print(f"Total batches to iterate: {self.n_total_batch}")
+        print(f"self.max_batches:", self.max_batches, "self.runTag:", self.runTag)
+        
+        
     def __iter__(self):
         """Yields batches of indices in the format of (sample_idx, feat_idx) tuples,
         where indices correspond to ConcatDataset of src_dataset_ls
         """
-        for _ in range(self.n_total_batch):
+        # for _ in range(self.n_total_batch):
+        for _ in range(self.max_batches):
             idx_ds = torch.multinomial(
                 self.prob, 1, replacement=True, generator=self.generator
             ).item()
@@ -366,7 +496,7 @@ class MixedBatchSampler(BatchSampler):
         self.raw_batches = [list(bs) for bs in self.src_batch_samplers]
 
     def __len__(self):
-        return self.n_total_batch
+        return self.max_batches
 
 def round_by(total, multiple, up=False):
     if up:

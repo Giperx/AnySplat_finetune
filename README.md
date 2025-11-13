@@ -79,6 +79,13 @@ save_interpolated_video(pred_all_extrinsic, pred_all_intrinsic, b, h, w, gaussia
 # single node:
 python src/main.py +experiment=dl3dv trainer.num_nodes=1
 
+### 20251113 add comment
+need to cd src/model/encoder/backbone/croco/curope 
+and python setup.py build_ext --inplace
+
+python src/main.py +experiment=nuscenes trainer.num_nodes=1
+WANDB_API_KEY="xxxx" python src/main.py +experiment=nuscenes trainer.num_nodes=1
+
 # multi nodes:
 export GPU_NUM=8
 export NUM_NODES=2

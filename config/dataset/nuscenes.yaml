@@ -1,0 +1,23 @@
+defaults:
+  - base_dataset
+  - view_sampler: all
+
+name: nuscenes
+roots: [datasets/nuscenes]
+
+scenes_json_path: "./1112_nuscenes_dataset_scenes_images_1600.json"  # 
+scene_data_json_path: "./1112_nuscenes_dataset_scenes_calibs_cam2ego_1600.ndjson" # 
+input_image_shape: [448, 448] # not used here
+original_image_shape: [900, 1600]
+cameras_are_circular: false
+
+# 基线缩放相关，
+baseline_min: 1e-3 # 
+baseline_max: 1e2 # 
+max_fov: 180.0
+avg_pose: false # not used here
+
+# not used here
+rescale_to_1cube: false # not used here
+make_baseline_1: false
+intr_augment: false # 缩放增强，not used here

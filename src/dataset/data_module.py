@@ -39,7 +39,8 @@ def get_data_shim(encoder: nn.Module) -> DataShim:
 # the training ratio of datasets (example)
 prob_mapping = {DatasetScannetpp: 0.5, 
                 DatasetDL3DV: 0.5,
-                DatasetCo3d: 0.5}
+                DatasetCo3d: 0.5,
+                DatasetNuScenes: 0.6,}
 
 @dataclass
 class DataLoaderStageCfg:
@@ -155,13 +156,18 @@ class DataModule(LightningDataModule):
              prob = [0.5] * len(datasets_ls)
         else:
             prob = None
+        max_batches=0.0005*len(dataset)
+        print("from val_dataloader in data_module, max_batches:", max_batches)
         sampler = MixedBatchSampler(datasets_ls, 
                                     batch_size=self.data_loader_cfg.train.batch_size, 
                                     num_context_views=dataset_cfg['view_sampler']['num_context_views'], 
                                     world_size=world_size, 
                                     rank=rank,
                                     prob=prob,
-                                    generator=self.get_generator(self.data_loader_cfg.train))
+                                    generator=self.get_generator(self.data_loader_cfg.train),
+                                    ### add max_batches to limit the number of batches per epoch
+                                    max_batches=max_batches,
+                                    runTag='validation')
         sampler.set_epoch(0)
         self.val_loader = DataLoader(
             dataset,

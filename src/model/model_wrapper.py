@@ -39,7 +39,7 @@ from ..loss.loss_ssim import ssim
 from ..misc.benchmarker import Benchmarker
 from ..misc.cam_utils import update_pose, get_pnp_pose, rotation_6d_to_matrix
 from ..misc.image_io import prep_image, save_image, save_video
-from ..misc.LocalLogger import LOG_PATH, LocalLogger
+from ..misc.LocalLogger import LocalLogger
 from ..misc.nn_module_tools import convert_to_buffer
 from ..misc.step_tracker import StepTracker
 from ..misc.utils import inverse_normalize, vis_depth_map, confidence_map, get_overlap_tag
@@ -473,7 +473,7 @@ class ModelWrapper(LightningModule):
         assert b == 1
         visualization_dump = {}
 
-        encoder_output, output = self.model(batch["context"]["image"], self.global_step, visualization_dump=visualization_dump)
+        encoder_output, output = self.model((batch["context"]["image"] + 1) / 2, self.global_step, visualization_dump=visualization_dump)
         gaussians, pred_pose_enc_list, depth_dict = encoder_output.gaussians, encoder_output.pred_pose_enc_list, encoder_output.depth_dict
         pred_context_pose, distill_infos = encoder_output.pred_context_pose, encoder_output.distill_infos
         infos = encoder_output.infos
@@ -499,7 +499,7 @@ class ModelWrapper(LightningModule):
         self.log(f"val/lpips", lpips)
         ssim = compute_ssim(rgb_gt, rgb_pred).mean()
         self.log(f"val/ssim", ssim)
-
+        print("psnr, lpips, ssim:", psnr, lpips, ssim)
         # depth metrics
         consis_absrel = abs_relative_difference(
             rearrange(output.depth, "b v h w -> (b v) h w"),
@@ -545,17 +545,45 @@ class ModelWrapper(LightningModule):
 
         comparison = torch.nn.functional.interpolate(
             comparison.unsqueeze(0), 
-            scale_factor=0.5, 
+            scale_factor=1.0, 
             mode='bicubic', 
             align_corners=False
         ).squeeze(0)
         
         self.logger.log_image(
-            "comparison",
+            f"comparison_{batch_idx}_{batch['scene'][0]}",
             [prep_image(add_border(comparison))],
             step=self.global_step,
             caption=batch["scene"],
         )
+
+        ### add 验证时就可以输出宽视野图像
+        encoder_output_wide, output_wide = self.model((batch["context"]["image"] + 1) / 2, self.global_step, visualization_dump=visualization_dump, wide_fov=True, new_width=896) # 1.7*448=761
+        rgb_pred_wide = output_wide.color[0].float()
+        depth_pred_wide = vis_depth_map(output_wide.depth[0])
+        render_normal_wide = (get_normal_map(output_wide.depth.flatten(0, 1), batch["context"]["intrinsics"].flatten(0, 1)).permute(0, 3, 1, 2) + 1) / 2.
+        comparison_wide = hcat(
+            add_label(vcat(*rgb_pred), "Target (Prediction_OG)"),
+            add_label(vcat(*rgb_gt), "Target (Ground Truth)"),
+            add_label(vcat(*rgb_pred_wide), "Target (Prediction)"),
+            # add_label(vcat(*depth_pred_wide), "Depth (Prediction)"),
+            # add_label(vcat(*render_normal_wide), "Normal (Prediction)"),
+        )
+
+        comparison_wide = torch.nn.functional.interpolate(
+            comparison_wide.unsqueeze(0), 
+            scale_factor=1.0, 
+            mode='bicubic', 
+            align_corners=False
+        ).squeeze(0)
+        
+        self.logger.log_image(
+            f"comparison_wide_{batch_idx}_{batch['scene'][0]}",
+            [prep_image(add_border(comparison_wide))],
+            step=self.global_step,
+            caption=batch["scene"],
+        )
+
 
         # self.logger.log_image(
         #     key="comparison",
@@ -593,10 +621,14 @@ class ModelWrapper(LightningModule):
                 self.logger.log_image(k, [prep_image(image)], step=self.global_step)
         
         # Run video validation step.
-        self.render_video_interpolation(batch)
-        self.render_video_wobble(batch)
-        if self.train_cfg.extended_visualization:
-            self.render_video_interpolation_exaggerated(batch)
+        # self.render_video_interpolation(batch, pred_context_pose, usePredPose=False)
+        self.render_video_interpolation(batch, pred_context_pose, usePredPose=True, start_idx=0, end_idx=1, camsName="center2left", number_frames=60)
+        if batch["context"]["extrinsics"].shape[1] > 2:
+            self.render_video_interpolation(batch, pred_context_pose, usePredPose=True, start_idx=1, end_idx=2, camsName="left2right", number_frames=120)
+            self.render_video_interpolation(batch, pred_context_pose, usePredPose=True, start_idx=0, end_idx=2, camsName="center2right", number_frames=60)
+        # self.render_video_wobble(batch)
+        # if self.train_cfg.extended_visualization:
+        #     self.render_video_interpolation_exaggerated(batch)
 
     @rank_zero_only
     def render_video_wobble(self, batch: BatchedExample) -> None:
@@ -624,31 +656,52 @@ class ModelWrapper(LightningModule):
         return self.render_video_generic(batch, trajectory_fn, "wobble", num_frames=60)
 
     @rank_zero_only
-    def render_video_interpolation(self, batch: BatchedExample) -> None:
+    def render_video_interpolation(self, batch: BatchedExample, pred_context_pose: dict, usePredPose: bool, start_idx: int, end_idx: int, camsName: str, number_frames: int) -> None:
         _, v, _, _ = batch["context"]["extrinsics"].shape
 
         def trajectory_fn(t):
-            extrinsics = interpolate_extrinsics(
-                batch["context"]["extrinsics"][0, 0],
-                (
-                    batch["context"]["extrinsics"][0, 1]
-                    if v == 2
-                    else batch["target"]["extrinsics"][0, 0]
-                ),
-                t,
-            )
-            intrinsics = interpolate_intrinsics(
-                batch["context"]["intrinsics"][0, 0],
-                (
-                    batch["context"]["intrinsics"][0, 1]
-                    if v == 2
-                    else batch["target"]["intrinsics"][0, 0]
-                ),
-                t,
-            )
-            return extrinsics[None], intrinsics[None]
+            if not usePredPose: # use GT pose
+                extrinsics = interpolate_extrinsics(
+                    batch["context"]["extrinsics"][0, start_idx],
+                    (
+                        batch["context"]["extrinsics"][0, end_idx]
+                        # if v == 2
+                        # else batch["target"]["extrinsics"][0, 3]
+                    ),
+                    t,
+                )
+                intrinsics = interpolate_intrinsics(
+                    batch["context"]["intrinsics"][0, start_idx],
+                    (
+                        batch["context"]["intrinsics"][0, end_idx]
+                        # if v == 2
+                        # else batch["target"]["intrinsics"][0, 3]
+                    ),
+                    t,
+                )
+                return extrinsics[None], intrinsics[None]
+            else: 
+                extrinsics = interpolate_extrinsics(
+                    pred_context_pose['extrinsic'][0, start_idx],
+                    (
+                        pred_context_pose['extrinsic'][0, end_idx]
+                        # if v == 2
+                        # else batch["target"]["extrinsics"][0, 3]
+                    ),
+                    t,
+                )
+                intrinsics = interpolate_intrinsics(
+                    pred_context_pose["intrinsic"][0, start_idx],
+                    (
+                        pred_context_pose["intrinsic"][0, end_idx]
+                        # if v == 2
+                        # else batch["target"]["intrinsics"][0, 3]
+                    ),
+                    t,
+                )
+                return extrinsics[None], intrinsics[None]
 
-        return self.render_video_generic(batch, trajectory_fn, "rgb")
+        return self.render_video_generic(batch, trajectory_fn, camsName, num_frames=number_frames, usePredPose=usePredPose)
 
     @rank_zero_only
     def render_video_interpolation_exaggerated(self, batch: BatchedExample) -> None:
@@ -705,8 +758,10 @@ class ModelWrapper(LightningModule):
         num_frames: int = 30,
         smooth: bool = True,
         loop_reverse: bool = True,
+        usePredPose: bool = False,
     ) -> None:
         # Render probabilistic estimate of scene.
+        name = ("predPose" if usePredPose else "gtPose") + batch['scene'][0] + str(self.global_step) + f"_{name}"
         encoder_output = self.model.encoder((batch["context"]["image"]+1)/2, self.global_step)
         gaussians, pred_pose_enc_list = encoder_output.gaussians, encoder_output.pred_pose_enc_list
 
@@ -734,7 +789,7 @@ class ModelWrapper(LightningModule):
         if loop_reverse:
             video = pack([video, video[::-1][1:-1]], "* c h w")[0]
         visualizations = {
-            f"video/{name}": wandb.Video(video[None], fps=30, format="mp4")
+            f"video/{name}": wandb.Video(video[None], fps=15, format="mp4")
         }
             
         # Since the PyTorch Lightning doesn't support video logging, log to wandb directly.
@@ -744,11 +799,11 @@ class ModelWrapper(LightningModule):
             assert isinstance(self.logger, LocalLogger)
             for key, value in visualizations.items():
                 tensor = value._prepare_video(value.data)
-                clip = mpy.ImageSequenceClip(list(tensor), fps=30)
-                dir = LOG_PATH / key
+                clip = mpy.ImageSequenceClip(list(tensor), fps=15)
+                dir = self.logger.log_path / key
                 dir.mkdir(exist_ok=True, parents=True)
                 clip.write_videofile(
-                    str(dir / f"{self.global_step:0>6}.mp4"), logger=None
+                    str(dir / f"{name}.mp4"), logger=None
                 )
 
     def print_preview_metrics(self, metrics: dict[str, float | Tensor], methods: list[str] | None = None, overlap_tag: str | None = None) -> None:
@@ -809,8 +864,8 @@ class ModelWrapper(LightningModule):
                 continue
             
             if "gaussian_param_head" in name or "interm" in name:
-                new_params.append(param)
-                new_param_names.append(name)
+                pretrained_params.append(param)
+                pretrained_param_names.append(name)
             else:
                 pretrained_params.append(param)
                 pretrained_param_names.append(name)
