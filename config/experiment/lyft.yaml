@@ -1,14 +1,16 @@
 # @package _global_
+
 defaults:
   - /dataset@_group_.lyft: lyft
-  - /dataset@_group_.nuscenes: nuscenes
   - override /model/encoder: anysplat
   - override /model/encoder/backbone: croco
   - override /loss: [mse, lpips, depth_consis] # ablate: opacity loss
 
 wandb:
-  name: multidataset-4gpu
-  tags: [multidataset, 448x448, nuscenes, lyft]
+  project: anysplat_finetune1112
+  name: lyft_tmp
+  tags: [lyft, 448x448]
+  mode: online
   
 model:
   encoder:
@@ -36,43 +38,34 @@ model:
     intermediate_layer_idx: [4, 11, 17, 23]
     
 dataset:
-  nuscenes:
-    input_image_shape: [448, 448]
-    view_sampler:
-      num_context_views: 3
-      num_target_views: 1
-      max_img_per_gpu: 24
-    avg_pose: false
-    intr_augment: false
-    normalize_by_pts3d: false
-    rescale_to_1cube: true
-
   lyft:
     input_image_shape: [448, 448]
     view_sampler:
       num_context_views: 3
       num_target_views: 1
-      max_img_per_gpu: 24
+      # min_distance_between_context_views: 32
+      # max_distance_between_context_views: 256
+      max_img_per_gpu: 3
     avg_pose: false
     intr_augment: false
     normalize_by_pts3d: false
     rescale_to_1cube: true
 
 optimizer:
-  lr: 2e-4
+  lr: 0.00000125 #1.25e-6 5e-5 #2e-4
   warm_up_steps: 1000
-  backbone_lr_multiplier: 0.1
+  backbone_lr_multiplier: 0.1 #0.1
 
 data_loader:
   train:
-    batch_size: 1 # not used here
+    batch_size: 4 # not used here
     
 trainer:
   max_steps: 30000
-  val_check_interval: 500
+  val_check_interval: 300
   num_nodes: 1
   accumulate_grad_batches: 1
-  precision: bf16-mixed
+  precision: "32"
 
 checkpointing:
   load: anysplat_hfog_1108
@@ -85,12 +78,12 @@ train:
   pose_loss_delta: 1.0
   cxt_depth_weight: 0.0
   weight_pose: 10.0
-  weight_depth: 1.0
+  weight_depth: 1.0 # 1.0
   weight_normal: 0.0
 
 hydra:
   run:
-    dir: output/exp_${wandb.name}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: outputs/exp_${wandb.name}/${now:%Y-%m-%d_%H-%M-%S}
 
 loss:
   mse:
@@ -98,7 +91,7 @@ loss:
   lpips:
     conf: false
   depth_consis:
-    weight: 0.1
+    weight: 0.1 # 
     loss_type: MSE
 
 

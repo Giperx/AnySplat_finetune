@@ -84,6 +84,8 @@ need to cd src/model/encoder/backbone/croco/curope
 and python setup.py build_ext --inplace
 
 python src/main.py +experiment=nuscenes trainer.num_nodes=1
+python src/main.py +experiment=lyft trainer.num_nodes=1
+python src/main.py +experiment=multi-dataset trainer.num_nodes=1
 WANDB_API_KEY="xxxx" python src/main.py +experiment=nuscenes trainer.num_nodes=1
 
 # multi nodes:

@@ -1,0 +1,27 @@
+defaults:
+  - base_dataset
+  - view_sampler: all
+
+name: lyft
+roots: [datasets/lyft/v1.01-train]
+
+scenes_json_path: "./1112_lyft_dataset_scenes_images_1920&1224.json"  # 
+scene_data_json_path: "./1112_lyft_dataset_scenes_calibs_cam2ego_1920&1224.ndjson" # 
+input_image_shape: [448, 448] # not used here
+original_image_shape: [1080, 1920]
+cameras_are_circular: false
+
+# lyft有两种分辨率的图像
+#      "1920x1080": 24192, #4032x3x2
+#      "1224x1024": 111888 # 18648x3x2
+
+# 基线缩放相关，
+baseline_min: 1e-3 # 
+baseline_max: 1e2 # 
+max_fov: 180.0
+avg_pose: false # not used here
+
+# not used here
+rescale_to_1cube: false # not used here
+make_baseline_1: false
+intr_augment: false # 缩放增强，not used here

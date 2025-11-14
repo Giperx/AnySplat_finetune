@@ -8,7 +8,7 @@ defaults:
 
 wandb:
   project: anysplat_finetune1112
-  name: NuScenes_tmp
+  name: nuScenes_tmp
   tags: [nuScenes, 448x448]
   mode: online
   
@@ -77,7 +77,7 @@ train:
   pose_loss_alpha: 1.0
   pose_loss_delta: 1.0
   cxt_depth_weight: 0.0
-  weight_pose: 1.0
+  weight_pose: 5.0
   weight_depth: 1.0 # 1.0
   weight_normal: 0.0
 

@@ -200,3 +200,12 @@ tmp_scripts/
 1112_nuscenes_dataset_scenes_images_1600.json
 anysplat_hfog_1108
 vggtCKPT
+check_images_resolutions.py
+host-a004_cam0_1232905142251064006.jpeg
+host-a004_cam1_1232905142234300006.jpeg
+host-a004_cam2_1232905142217652006.jpeg
+host-a004_cam3_1232905142200897006.jpeg
+host-a004_cam5_1232905142267556006.jpeg
+host-a004_cam4_1232905142284193006.jpeg
+1112_lyft_dataset_scenes_calibs_cam2ego_1920&1224.ndjson
+1112_lyft_dataset_scenes_images_1920&1224.json

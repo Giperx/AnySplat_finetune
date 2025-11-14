@@ -551,7 +551,7 @@ class ModelWrapper(LightningModule):
         ).squeeze(0)
         
         self.logger.log_image(
-            f"comparison_{batch_idx}_{batch['scene'][0]}",
+            f"{batch_idx}_{batch['scene'][0]}",
             [prep_image(add_border(comparison))],
             step=self.global_step,
             caption=batch["scene"],
@@ -560,8 +560,8 @@ class ModelWrapper(LightningModule):
         ### add 验证时就可以输出宽视野图像
         encoder_output_wide, output_wide = self.model((batch["context"]["image"] + 1) / 2, self.global_step, visualization_dump=visualization_dump, wide_fov=True, new_width=896) # 1.7*448=761
         rgb_pred_wide = output_wide.color[0].float()
-        depth_pred_wide = vis_depth_map(output_wide.depth[0])
-        render_normal_wide = (get_normal_map(output_wide.depth.flatten(0, 1), batch["context"]["intrinsics"].flatten(0, 1)).permute(0, 3, 1, 2) + 1) / 2.
+        # depth_pred_wide = vis_depth_map(output_wide.depth[0])
+        # render_normal_wide = (get_normal_map(output_wide.depth.flatten(0, 1), batch["context"]["intrinsics"].flatten(0, 1)).permute(0, 3, 1, 2) + 1) / 2.
         comparison_wide = hcat(
             add_label(vcat(*rgb_pred), "Target (Prediction_OG)"),
             add_label(vcat(*rgb_gt), "Target (Ground Truth)"),
@@ -578,7 +578,7 @@ class ModelWrapper(LightningModule):
         ).squeeze(0)
         
         self.logger.log_image(
-            f"comparison_wide_{batch_idx}_{batch['scene'][0]}",
+            f"{batch_idx}_wide_{batch['scene'][0]}",
             [prep_image(add_border(comparison_wide))],
             step=self.global_step,
             caption=batch["scene"],
@@ -761,7 +761,7 @@ class ModelWrapper(LightningModule):
         usePredPose: bool = False,
     ) -> None:
         # Render probabilistic estimate of scene.
-        name = ("predPose" if usePredPose else "gtPose") + batch['scene'][0] + str(self.global_step) + f"_{name}"
+        name = ("predPose_" if usePredPose else "gtPose_") + batch['scene'][0] + "_" +  f"_{name}" + str(self.global_step)
         encoder_output = self.model.encoder((batch["context"]["image"]+1)/2, self.global_step)
         gaussians, pred_pose_enc_list = encoder_output.gaussians, encoder_output.pred_pose_enc_list
 
