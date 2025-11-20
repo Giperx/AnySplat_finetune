@@ -877,7 +877,7 @@ class ModelWrapper(LightningModule):
              },
             {
                 "params": pretrained_params,
-                "lr": self.optimizer_cfg.lr * self.optimizer_cfg.backbone_lr_multiplier,
+                "lr": self.optimizer_cfg.lr #* self.optimizer_cfg.backbone_lr_multiplier,
             },
         ]
         optimizer = torch.optim.AdamW(param_dicts, lr=self.optimizer_cfg.lr, weight_decay=0.05, betas=(0.9, 0.95))

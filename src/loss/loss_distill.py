@@ -106,7 +106,10 @@ class DistillLoss(nn.Module):
         loss_R = loss_R.mean()
         loss_fl = loss_fl.mean()
         
-        return loss_T, loss_R, loss_fl
+        weight_T, weight_R, weight_fl = 1.0, 1.0, 0.5
+        
+        # return loss_T, loss_R, loss_fl
+        return loss_T * weight_T + loss_R * weight_R + loss_fl * weight_fl
 
     def forward(self, distill_infos, pred_pose_enc_list, prediction, batch):
         loss_pose = 0.0
@@ -118,7 +121,9 @@ class DistillLoss(nn.Module):
                 i_weight = self.gamma ** (num_predictions - i - 1)
                 cur_pred_pose_enc = pred_pose_enc_list[i]
                 cur_pesudo_gt_pose_enc = pesudo_gt_pose_enc[i]
-                loss_pose += i_weight * huber_loss(cur_pred_pose_enc, cur_pesudo_gt_pose_enc).mean()
+                # loss_pose += i_weight * huber_loss(cur_pred_pose_enc, cur_pesudo_gt_pose_enc).mean()
+                ### add camera loss l1 here
+                loss_pose += i_weight * self.camera_loss_single(cur_pred_pose_enc, cur_pesudo_gt_pose_enc, loss_type="l1")
             loss_pose = loss_pose / num_predictions
             loss_pose = torch.nan_to_num(loss_pose, nan=0.0, posinf=0.0, neginf=0.0)
         

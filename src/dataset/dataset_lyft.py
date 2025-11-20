@@ -390,6 +390,15 @@ class DatasetLyft(Dataset):
         logger.debug(f"Extrinsics shape: {extrinsics.shape}, dtype: {extrinsics.dtype}")
         logger.debug(f"Intrinsics shape: {intrinsics.shape}, dtype: {intrinsics.dtype}")
         
+        # 在归一化之前，同步打乱 image_data_list, extrinsics, 和 intrinsics
+        if self.stage == "train":
+            num_views = len(image_data_list)
+            shuffled_indices = torch.randperm(num_views)
+            print("shuffled_indices:", shuffled_indices)
+            image_data_list = [image_data_list[i] for i in shuffled_indices]
+            extrinsics = extrinsics[shuffled_indices]
+            intrinsics = intrinsics[shuffled_indices]
+        
         normalized_intrinsics = intrinsics.clone()
         # 归一化内参到 [0, 1] 范围
         if self.cfg.input_image_shape[0] == 448 and self.cfg.input_image_shape[1] == 448:
