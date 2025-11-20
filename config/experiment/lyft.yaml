@@ -27,7 +27,7 @@ model:
     freeze_backbone: false
     useVGGT: false # use vggt pretrained weights or anysplat pretrained weights
     distill: true
-    frozenAggregator: false
+    frozenAggregator: true
     frozenGaussianHead: false
     frozenCameraHead: false
     frozenDepthHead: false
@@ -49,10 +49,10 @@ dataset:
     avg_pose: false
     intr_augment: false
     normalize_by_pts3d: false
-    rescale_to_1cube: true
+    rescale_to_1cube: false
 
 optimizer:
-  lr: 0.00000125 #1.25e-6 5e-5 #2e-4
+  lr: 1e-6 #0.00000125 #1.25e-6 5e-5 #2e-4
   warm_up_steps: 1000
   backbone_lr_multiplier: 0.1 #0.1
 
@@ -64,8 +64,8 @@ trainer:
   max_steps: 30000
   val_check_interval: 300
   num_nodes: 1
-  accumulate_grad_batches: 1
-  precision: "32"
+  accumulate_grad_batches: 1 #1
+  precision: bf16-mixed #"32"
 
 checkpointing:
   load: anysplat_hfog_1108
@@ -77,7 +77,7 @@ train:
   pose_loss_alpha: 1.0
   pose_loss_delta: 1.0
   cxt_depth_weight: 0.0
-  weight_pose: 10.0
+  weight_pose: 20.0
   weight_depth: 1.0 # 1.0
   weight_normal: 0.0
 
