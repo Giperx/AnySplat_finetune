@@ -17,3 +17,5 @@ src/dataset/data_module.py中，val_dataloader实例化MixedBatchSampler，需�
 src/model/model_wrapper.py 中，图像颜色输出；宽视野图像render；视频合成。
 src/model/model/anysplat.py 中修改内参，得到宽视野图像。
 src/model/model_wrapper.py configure_optimizers函数中，所有参数都作为pretrained params
+
+用伪DepthMap和伪pose，生成GT pose下的伪DepthMap，作为和GT pose配套的DepthMap监督信号。

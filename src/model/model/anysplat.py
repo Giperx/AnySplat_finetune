@@ -108,12 +108,14 @@ class AnySplat(nn.Module, huggingface_hub.PyTorchModelHubMixin):
         visualization_dump: Optional[dict] = None,
         near: float = 0.01,
         far: float = 100.0,
+        extrinsics_cam2world_B: Optional[torch.Tensor] = None,
+        intrinsics_B: Optional[torch.Tensor] = None,
         wide_fov: bool = False,
         new_width: Optional[int] = None,
     ):
         b, v, c, h, w = context_image.shape
         device = context_image.device
-        encoder_output = self.encoder(context_image, global_step, visualization_dump=visualization_dump)
+        encoder_output = self.encoder(context_image, global_step, visualization_dump=visualization_dump, extrinsics_cam2world_B=extrinsics_cam2world_B if extrinsics_cam2world_B is not None else None, intrinsics_B=intrinsics_B if intrinsics_B is not None else None)
         gaussians, pred_context_pose = encoder_output.gaussians, encoder_output.pred_context_pose
         if wide_fov:
             ### add for wide fov rendering

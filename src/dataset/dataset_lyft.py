@@ -394,7 +394,7 @@ class DatasetLyft(Dataset):
         if self.stage == "train":
             num_views = len(image_data_list)
             shuffled_indices = torch.randperm(num_views)
-            print("shuffled_indices:", shuffled_indices)
+            # print("shuffled_indices:", shuffled_indices)
             image_data_list = [image_data_list[i] for i in shuffled_indices]
             extrinsics = extrinsics[shuffled_indices]
             intrinsics = intrinsics[shuffled_indices]
@@ -402,6 +402,7 @@ class DatasetLyft(Dataset):
         normalized_intrinsics = intrinsics.clone()
         # 归一化内参到 [0, 1] 范围
         if self.cfg.input_image_shape[0] == 448 and self.cfg.input_image_shape[1] == 448:
+            # print("Using TARGET_SIZE for normalization")
             img_h, img_w = self.TARGET_SIZE, self.TARGET_SIZE
             ### intrinsics 还是self.ORIGINAL_HEIGHT, self.ORIGINAL_WIDTH下的，需要先缩放一次
             s_x = float(img_w) / float(self.ORIGINAL_WIDTH)

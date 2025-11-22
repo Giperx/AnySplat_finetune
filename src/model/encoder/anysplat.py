@@ -23,6 +23,8 @@ from src.model.encoder.heads.vggt_dpt_gs_head import VGGT_DPT_GS_Head
 from src.model.encoder.vggt.utils.geometry import (
     batchify_unproject_depth_map_to_point_map,
     unproject_depth_map_to_point_map,
+    batchify_project_world_to_new_depth,
+    reproject_depth_maps_batch_with_conf
 )
 from src.model.encoder.vggt.utils.pose_enc import pose_encoding_to_extri_intri
 from src.utils.geometry import get_rel_pos  # used for model hub
@@ -109,6 +111,7 @@ class EncoderAnySplatCfg:
         "None",
     ] = "None"
     useVGGT: bool = True
+    usePseudoDepthNew: bool = True
     distill: bool = False
     frozenAggregator = False
     frozenGaussianHead = False
@@ -148,6 +151,7 @@ class EncoderAnySplat(Encoder[EncoderAnySplatCfg]):
         self.aggregator = model_full.aggregator.to(torch.bfloat16)
         self.freeze_backbone = cfg.freeze_backbone
         self.useVGGT = cfg.useVGGT
+        self.usePseudoDepthNew = cfg.usePseudoDepthNew
         self.distill = cfg.distill
         self.frozenAggregator = cfg.frozenAggregator
         self.frozenGaussianHead = cfg.frozenGaussianHead
@@ -384,6 +388,8 @@ class EncoderAnySplat(Encoder[EncoderAnySplatCfg]):
         image: torch.Tensor,
         global_step: int = 0,
         visualization_dump: Optional[dict] = None,
+        extrinsics_cam2world_B: Optional[torch.Tensor] = None,
+        intrinsics_B: Optional[torch.Tensor] = None,
     ) -> Gaussians:
         device = image.device
         b, v, _, h, w = image.shape
@@ -426,10 +432,27 @@ class EncoderAnySplat(Encoder[EncoderAnySplatCfg]):
                         patch_start_idx=distill_patch_start_idx,
                     )
 
+                    ###  用pseudo DepthMap和用pseudo pose，生成GT pose下的new pseudo DepthMap，作为和GT pose配套的DepthMap监督信号。
+                    # print("self.usePseudoDepthNew:", self.usePseudoDepthNew)
+                    # print("extrinsics_cam2world_B:", extrinsics_cam2world_B)
+                    # print("intrinsics_B:", intrinsics_B)
+                    # print("self.usePseudoDepthNew:", self.usePseudoDepthNew)
+                    if extrinsics_cam2world_B is not None and intrinsics_B is not None and self.usePseudoDepthNew:
+                        # print("Generating new pseudo depth map under GT poses...")
+                        # distill_depth_map_new, distill_depth_conf_new, distill_valid_mask = batchify_project_world_to_new_depth(
+                        # distill_depth_map, distill_depth_conf, distill_extrinsic, distill_intrinsic,
+                        # extrinsics_cam2world_B, intrinsics_B)
+                        distill_depth_map_new, distill_depth_conf_new, distill_valid_mask = reproject_depth_maps_batch_with_conf(
+                        distill_depth_map, distill_depth_conf, distill_extrinsic, distill_intrinsic,
+                        extrinsics_cam2world_B, intrinsics_B)
+                        distill_infos["distill_depth_map_new"] = distill_depth_map_new
+                        distill_infos["distill_valid_mask"] = distill_valid_mask
+                        
                     # Convert depth to 3D points
                     distill_pts_all = batchify_unproject_depth_map_to_point_map(
                         distill_depth_map, distill_extrinsic, distill_intrinsic
                     )
+                                        
                 # Store results
                 distill_infos["pred_pose_enc_list"] = distill_pred_pose_enc_list
                 distill_infos["pts_all"] = distill_pts_all
@@ -453,6 +476,9 @@ class EncoderAnySplat(Encoder[EncoderAnySplatCfg]):
                 del distill_pred_pose_enc_list, last_distill_pred_pose_enc
                 del distill_extrinsic, distill_intrinsic
                 del distill_depth_map, distill_depth_conf
+                if "distill_depth_map_new" in distill_infos:
+                    del distill_depth_map_new, distill_depth_conf_new
+                # del distill_pts_all, distill_image, conf_mask
                 torch.cuda.empty_cache()
 
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
@@ -630,6 +656,10 @@ class EncoderAnySplat(Encoder[EncoderAnySplatCfg]):
                 intrinsic=intrinsic,
             ),
             depth_dict=dict(depth=depth_map, conf_valid_mask=conf_valid_mask),
+            depth_dict_new=dict(
+                depth=distill_infos["distill_depth_map_new"] if "distill_depth_map_new" in distill_infos else None,
+                conf_valid_mask=distill_infos["distill_valid_mask"] if "distill_valid_mask" in distill_infos else None
+                ),
             infos=infos,
             distill_infos=distill_infos,
         )

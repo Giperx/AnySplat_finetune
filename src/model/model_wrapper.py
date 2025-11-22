@@ -198,7 +198,9 @@ class ModelWrapper(LightningModule):
         # Run the model.
         visualization_dump = None
 
-        encoder_output, output = self.model(context_image, self.global_step, visualization_dump=visualization_dump)
+        encoder_output, output = self.model(context_image, self.global_step, visualization_dump=visualization_dump,
+                                            extrinsics_cam2world_B=batch["context"]["extrinsics"],
+                                            intrinsics_B=batch["context"]["intrinsics"])
         gaussians, pred_pose_enc_list, depth_dict = encoder_output.gaussians, encoder_output.pred_pose_enc_list, encoder_output.depth_dict
         pred_context_pose = encoder_output.pred_context_pose
         infos = encoder_output.infos
@@ -267,10 +269,10 @@ class ModelWrapper(LightningModule):
         # Skip batch if loss is too high after certain step
         SKIP_AFTER_STEP = 1000  
         LOSS_THRESHOLD = 0.2
-        if self.global_step > SKIP_AFTER_STEP and total_loss > LOSS_THRESHOLD:
-            print(f"Skipping batch with high loss ({total_loss:.6f}) at step {self.global_step} on Rank {self.global_rank}")
-            # set to a really small number
-            return total_loss * 1e-10
+        # if self.global_step > SKIP_AFTER_STEP and total_loss > LOSS_THRESHOLD:
+        #     print(f"Skipping batch with high loss ({total_loss:.6f}) at step {self.global_step} on Rank {self.global_rank}")
+        #     # set to a really small number
+        #     return total_loss * 1e-10
 
         if (
             self.global_rank == 0
@@ -473,7 +475,10 @@ class ModelWrapper(LightningModule):
         assert b == 1
         visualization_dump = {}
 
-        encoder_output, output = self.model((batch["context"]["image"] + 1) / 2, self.global_step, visualization_dump=visualization_dump)
+        # encoder_output, output = self.model((batch["context"]["image"] + 1) / 2, self.global_step, visualization_dump=visualization_dump)
+        encoder_output, output = self.model((batch["context"]["image"] + 1) / 2, self.global_step, visualization_dump=visualization_dump,
+                                            extrinsics_cam2world_B=batch["context"]["extrinsics"],
+                                            intrinsics_B=batch["context"]["intrinsics"])
         gaussians, pred_pose_enc_list, depth_dict = encoder_output.gaussians, encoder_output.pred_pose_enc_list, encoder_output.depth_dict
         pred_context_pose, distill_infos = encoder_output.pred_context_pose, encoder_output.distill_infos
         infos = encoder_output.infos
@@ -529,6 +534,8 @@ class ModelWrapper(LightningModule):
         model_depth_pred = depth_dict["depth"].squeeze(-1)[0]
         model_depth_pred = vis_depth_map(model_depth_pred)
         
+        pseudo_new_depth = vis_depth_map(encoder_output.depth_dict_new["depth"].squeeze(-1)[0])
+        
         render_normal = (get_normal_map(output.depth.flatten(0, 1), batch["context"]["intrinsics"].flatten(0, 1)).permute(0, 3, 1, 2) + 1) / 2.
         pred_normal = (get_normal_map(depth_dict['depth'].flatten(0, 1).squeeze(-1), batch["context"]["intrinsics"].flatten(0, 1)).permute(0, 3, 1, 2) + 1) / 2.
 
@@ -537,9 +544,10 @@ class ModelWrapper(LightningModule):
             add_label(vcat(*rgb_gt), "Target (Ground Truth)"),
             add_label(vcat(*rgb_pred), "Target (Prediction)"),
             add_label(vcat(*depth_pred), "Depth (Prediction)"),
-            add_label(vcat(*model_depth_pred), "Depth (VGGT Prediction)"),
+            add_label(vcat(*model_depth_pred), "Depth (DPT Prediction)"),
+            add_label(vcat(*pseudo_new_depth), "Depth (pseudo new Prediction)"),
             add_label(vcat(*render_normal), "Normal (Prediction)"),
-            add_label(vcat(*pred_normal), "Normal (VGGT Prediction)"),
+            add_label(vcat(*pred_normal), "Normal (DPT Prediction)"),
             add_label(vcat(*colored_diff_map), "Diff Map"),
         )
 
