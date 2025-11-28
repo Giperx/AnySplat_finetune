@@ -20,7 +20,7 @@ baseline_min: 1e-3 #
 baseline_max: 1e2 # 
 max_fov: 180.0
 avg_pose: false # not used here
-111
+
 # not used here
 rescale_to_1cube: false # not used here
 make_baseline_1: false

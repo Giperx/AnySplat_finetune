@@ -204,7 +204,7 @@ def reproject_depth_maps_batch_with_conf(
     X = torch.matmul(pred[:, 0], torch.linalg.inv(gt[:, 0]))
     extrinsics_c2w_B_aligned = torch.matmul(X[:, None], gt)
     # print("extrinsics_c2w_B_aligned:", extrinsics_c2w_B_aligned)
-    # extrinsics_c2w_B_aligned[:, 0] = pred[:, 0]  # 保持第0个视角和pred一致
+    extrinsics_c2w_B_aligned[:, 0] = pred[:, 0]  # 保持第0个视角和pred一致
 
     ### 同时内参在加载时已经归一化到 [0,1]，这里需要还原回像素坐标
     # intrinsics_B_aligned = intrinsics_B.clone()

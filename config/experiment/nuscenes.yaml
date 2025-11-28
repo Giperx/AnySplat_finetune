@@ -10,7 +10,7 @@ wandb:
   project: anysplat_finetune1122
   name: nuScenes_tmp
   tags: [nuScenes, 448x448]
-  mode: online
+  mode: offline
   
 model:
   encoder:
@@ -49,7 +49,7 @@ dataset:
     avg_pose: false
     intr_augment: false
     normalize_by_pts3d: false
-    rescale_to_1cube: false
+    rescale_to_1cube: true
 
 optimizer:
   lr: 0.00000125 #1.25e-6 5e-5 #2e-4
