@@ -8,6 +8,7 @@ from .loss_lod import LossLOD, LossLODCfgWrapper
 from .loss_depth_consis import LossDepthConsis, LossDepthConsisCfgWrapper
 from .loss_normal_consis import LossNormalConsis, LossNormalConsisCfgWrapper
 from .loss_chamfer_distance import LossChamferDistance, LossChamferDistanceCfgWrapper
+
 LOSSES = {
     LossDepthCfgWrapper: LossDepth,
     LossLpipsCfgWrapper: LossLpips,

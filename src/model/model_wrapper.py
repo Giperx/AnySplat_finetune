@@ -22,6 +22,7 @@ from loss.loss_mse import LossMse
 from model.encoder.vggt.utils.pose_enc import pose_encoding_to_extri_intri
 
 from ..loss.loss_distill import DistillLoss
+from ..loss.loss_cross_view_consis import CrossViewPhotoDepthConsistencyLossForDistill
 from src.utils.render import generate_path
 from src.utils.point import get_normal_map
 
@@ -99,6 +100,10 @@ class TrainCfg:
     weight_normal: float = 1.0
     render_ba: bool = False
     render_ba_after_step: int = 0
+    # cross view consistency loss weights
+    cross_view_consis_weight_photo: float = 1.0
+    cross_view_consis_weight_depth: float = 1.0
+    cross_view_consis_ssim_weight: float = 0.85
 
 
 @runtime_checkable
@@ -153,6 +158,16 @@ class ModelWrapper(LightningModule):
                 weight_depth=self.train_cfg.weight_depth,
                 weight_normal=self.train_cfg.weight_normal
             )
+        
+        self.cross_view_loss = CrossViewPhotoDepthConsistencyLossForDistill(
+            photo_weight=self.train_cfg.cross_view_consis_weight_photo,
+            depth_weight=self.train_cfg.cross_view_consis_weight_depth,
+            ssim_weight=self.train_cfg.cross_view_consis_ssim_weight,
+            depth_l1=True,
+            min_depth=1e-3,
+            max_depth=80.0,
+            use_valid_mask=True,
+        )
 
         # This is used for testing.
         self.benchmarker = Benchmarker()
@@ -260,6 +275,16 @@ class ModelWrapper(LightningModule):
                 self.log("loss/distill_depth", loss_distill_list['loss_depth'])
                 self.log("loss/distill_normal", loss_distill_list['loss_normal'])
                 total_loss = total_loss + loss_distill_list['loss_distill']
+            
+            loss_cross_view = self.cross_view_loss(
+                pred_pose_enc_list=pred_pose_enc_list,
+                prediction=output,
+                batch=batch,
+            )
+            self.log("loss/cross_view", loss_cross_view["loss_cross_total"])
+            self.log("loss/cross_view_photo", loss_cross_view["loss_cross_photo"])
+            self.log("loss/cross_view_depth", loss_cross_view["loss_cross_depth"])
+            total_loss = total_loss + loss_cross_view["loss_cross_total"]
         
         self.log("loss/total", total_loss)
         print(f"total_loss: {total_loss}")

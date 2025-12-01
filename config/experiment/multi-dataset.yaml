@@ -8,7 +8,7 @@ defaults:
 
 wandb:
   name: multidataset-4gpu
-  tags: [multidataset, 448x448, nuscenes, lyft]
+  tags: [multidataset, 448x448, nuscenes, lyft, crossViewConsis]
   
 model:
   encoder:
@@ -84,13 +84,13 @@ train:
   pose_loss_alpha: 1.0
   pose_loss_delta: 1.0
   cxt_depth_weight: 0.0
-  weight_pose: 20.0
-  weight_depth: 1.0
+  weight_pose: 10.0
+  weight_depth: 0.5
   weight_normal: 0.0
 
 hydra:
   run:
-    dir: output/exp_${wandb.name}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: outputs/exp_${wandb.name}/${now:%Y-%m-%d_%H-%M-%S}
 
 loss:
   mse:

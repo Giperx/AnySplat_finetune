@@ -7,9 +7,9 @@ defaults:
   - override /loss: [mse, lpips, depth_consis] # ablate: opacity loss
 
 wandb:
-  project: anysplat_finetune1112
-  name: nuScenes_tmp
-  tags: [nuScenes, 448x448]
+  project: anysplat_finetune1201
+  name: nuScenes_crossViewConsis
+  tags: [nuScenes, 448x448, crossViewConsis]
   mode: online
   
 model:
@@ -27,9 +27,9 @@ model:
     freeze_backbone: false
     useVGGT: false # use vggt pretrained weights or anysplat pretrained weights
     distill: true
-    frozenAggregator: false
-    frozenGaussianHead: false
-    frozenCameraHead: false
+    frozenAggregator: true
+    frozenGaussianHead: true
+    frozenCameraHead: true
     frozenDepthHead: false
     render_conf: false
     conf_threshold: 0.1
@@ -49,12 +49,12 @@ dataset:
     avg_pose: false
     intr_augment: false
     normalize_by_pts3d: false
-    rescale_to_1cube: true
+    rescale_to_1cube: false
 
 optimizer:
-  lr: 0.00000125 #1.25e-6 5e-5 #2e-4
+  lr: 1e-5 #1.25e-6 5e-5 #2e-4
   warm_up_steps: 1000
-  backbone_lr_multiplier: 0.1 #0.1
+  backbone_lr_multiplier: 0.1 #0.1 未使用
 
 data_loader:
   train:
@@ -77,9 +77,13 @@ train:
   pose_loss_alpha: 1.0
   pose_loss_delta: 1.0
   cxt_depth_weight: 0.0
-  weight_pose: 5.0
-  weight_depth: 1.0 # 1.0
+  weight_pose: 10.0
+  weight_depth: 0.5 # 1.0
   weight_normal: 0.0
+  # cross view consistency loss weights
+  cross_view_consis_weight_photo: 2.0
+  cross_view_consis_weight_depth: 2.0
+  cross_view_consis_ssim_weight: 0.85
 
 hydra:
   run:
